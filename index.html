@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>IYANO TOOLS</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>.mono{font-family:monospace}.live-dot{animation:pulse 1.5s infinite}
+@keyframes pulse{0%{opacity:1}50%{opacity:.3}100%{opacity:1}}</style>
+</head><body style="background:#080a0f;color:white;padding:12px">
+<div style="max-width:800px;margin:auto">
+<div style="display:flex;justify-content:space-between;border-bottom:1px solid #222;padding:12px 0">
+<h1 style="font-weight:900">IYANO<span style="color:#a3e635">TOOLS</span></h1>
+<div style="background:#111;padding:4px 12px;border-radius:20px;border:1px solid #333;font-size:11px"><span style="display:inline-block;width:8px;height:8px;background:#22c55e;border-radius:50%" class="live-dot"></span> <span id="status">CONNECTING...</span></div>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:16px 0">
+<button onclick="switchMarket('R_75')" id="btn-R_75" style="background:#a3e635;color:black;font-weight:bold;padding:12px;border-radius:12px">V75</button>
+<button onclick="switchMarket('BOOM_1000')" id="btn-BOOM_1000" style="background:#111;border:1px solid #333;padding:12px;border-radius:12px;color:white">BOOM 1000</button>
+<button onclick="switchMarket('CRASH_1000')" id="btn-CRASH_1000" style="background:#111;border:1px solid #333;padding:12px;border-radius:12px;color:white">CRASH 1000</button>
+</div>
+<div style="background:#12151f;border:1px solid #222;border-radius:16px;padding:20px">
+<p id="marketName" style="color:#666;font-size:10px">VOLATILITY 75 INDEX</p>
+<h2 id="price" style="font-size:48px;font-weight:900;font-family:monospace">--.--</h2>
+<p id="priceChange" style="font-size:12px;color:#666">Waiting...</p>
+<div style="display:flex;gap:2px;margin-top:20px;height:40px;align-items:end;overflow:hidden" id="tickBar"></div>
+<p style="margin-top:12px">RSI: <span id="rsi">--</span> <span id="rsiLabel" style="background:#222;padding:2px 8px;border-radius:6px;font-size:10px">NEUTRAL</span></p>
+<p>Last Digit: <span id="lastDigit" style="font-size:24px;font-weight:bold">-</span> | <span id="evenOdd">--</span> | <span id="digitFreq"></span></p>
+<p id="spike" style="font-size:11px;color:#666">NO SPIKE</p>
+</div>
+<div id="digits" style="display:grid;grid-template-columns:repeat(10,1fr);gap:4px;margin-top:16px;background:#12151f;border:1px solid #222;border-radius:12px;padding:12px"></div>
+</div>
+<script>
+let ws,currentMarket='R_75',ticks=[],lastPrice=0,digitCount=Array(10).fill(0),evenCount=0,totalCount=0;
+function connect(){ws=new WebSocket('wss://ws.derivws.com/websockets/v3?app_id=1089');
+ws.onopen=()=>{document.getElementById('status').textContent='LIVE';subscribe()};
+ws.onmessage=(msg)=>{let data=JSON.parse(msg.data);if(data.tick)handleTick(data.tick)};
+ws.onclose=()=>setTimeout(connect,2000);}
+function subscribe(){ws.send(JSON.stringify({ticks:currentMarket,subscribe:1}))}
+function switchMarket(m){currentMarket=m;ticks=[];digitCount=Array(10).fill(0);evenCount=0;totalCount=0;document.getElementById('tickBar').innerHTML='';document.querySelectorAll('button').forEach(b=>b.style.background='#111');document.getElementById('btn-'+m).style.background='#a3e635';document.getElementById('marketName').textContent=m+' INDEX';if(ws){ws.send(JSON.stringify({forget_all:'ticks'}));subscribe()}}
+function handleTick(tick){let price=parseFloat(tick.quote);document.getElementById('price').textContent=price.toFixed(2);let diff=lastPrice?(price-lastPrice):0;let c=document.getElementById('priceChange');if(diff>0){c.textContent='▲ +'+diff.toFixed(2);c.style.color='#22c55e'}else if(diff<0){c.textContent='▼ '+diff.toFixed(2);c.style.color='#ef4444'}lastPrice=price;ticks.push(price);if(ticks.length>50)ticks.shift();let bar=document.getElementById('tickBar');let d=document.createElement('div');d.style.width='6px';d.style.borderRadius='2px';d.style.background=diff>=0?'#22c55e':'#ef4444';d.style.height=(15+Math.random()*25)+'px';bar.appendChild(d);if(bar.children.length>40)bar.removeChild(bar.firstChild);if(ticks.length>14){let g=0,l=0;for(let i=ticks.length-14;i<ticks.length-1;i++){let di=ticks[i+1]-ticks[i];if(di>0)g+=di;else l-=di}let rsi=100-(100/(1+g/(l||1)));document.getElementById('rsi').textContent=rsi.toFixed(0);document.getElementById('rsiLabel').textContent=rsi>70?'OVERBOUGHT':rsi<30?'OVERSOLD':'NEUTRAL'}let s=tick.quote.toString();let last=parseInt(s.slice(-1));if(!isNaN(last)){digitCount[last]++;totalCount++;if(last%2==0)evenCount++;document.getElementById('lastDigit').textContent=last;document.getElementById('evenOdd').textContent=Math.round(evenCount/totalCount*100)+'% even';let con=document.getElementById('digits');con.innerHTML='';for(let i=0;i<10;i++){let pct=totalCount?(digitCount[i]/totalCount*100):0;con.innerHTML+=`<div style="text-align:center"><div style="background:#222;height:50px;display:flex;align-items:end;justify-content:center"><div style="background:#a3e635;width:100%;height:${pct*2}px"></div></div><p style="font-size:10px">${i}</p><p style="font-size:8px;color:#666">${pct.toFixed(0)}%</p></div>`}document.getElementById('digitFreq').textContent='Most:'+digitCount.indexOf(Math.max(...digitCount))}if(Math.abs(diff)>1){document.getElementById('spike').textContent='SPIKE '+diff.toFixed(2);document.getElementById('spike').style.color='#facc15';setTimeout(()=>{document.getElementById('spike').textContent='NO SPIKE';document.getElementById('spike').style.color='#666'},3000)}}
+connect();
+</script></body></html>
